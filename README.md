@@ -1,1 +1,143 @@
-# blerobot2.github.io
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<title>Robot BLE Joystick</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+    margin: 0;
+    background: #111;
+    color: white;
+    font-family: Arial, sans-serif;
+    text-align: center;
+}
+
+h1 {
+    margin-top: 20px;
+}
+
+button {
+    width: 200px;
+    height: 50px;
+    font-size: 18px;
+    border: none;
+    border-radius: 10px;
+    background: #00c853;
+    color: white;
+    margin: 15px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:active {
+    transform: scale(0.95);
+}
+
+#joystick {
+    width: 250px;
+    height: 250px;
+    background: #222;
+    border-radius: 50%;
+    margin: 30px auto;
+    position: relative;
+    touch-action: none;
+}
+
+#stick {
+    width: 100px;
+    height: 100px;
+    background: #2962ff;
+    border-radius: 50%;
+    position: absolute;
+    left: 75px;
+    top: 75px;
+    transition: 0.05s;
+}
+</style>
+</head>
+<body>
+
+<h1>🤖 Robot BLE</h1>
+<button onclick="connect()">Połącz</button>
+
+<div id="joystick">
+    <div id="stick"></div>
+</div>
+
+<script>
+let device = null;
+let characteristic = null;
+let lastCommand = "";
+
+async function connect() {
+    try {
+        device = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: []
+        });
+
+        const server = await device.gatt.connect();
+        const services = await server.getPrimaryServices();
+
+        for (let service of services) {
+            const chars = await service.getCharacteristics();
+            for (let char of chars) {
+                if (char.properties.write || char.properties.writeWithoutResponse) {
+                    characteristic = char;
+                    break;
+                }
+            }
+            if (characteristic) break;
+        }
+
+        if (characteristic) {
+            alert("✅ Połączono!");
+            document.querySelector("button").style.background = "#0091ea";
+        } else {
+            alert("❌ Nie znaleziono charakterystyki do zapisu.");
+        }
+
+    } catch (error) {
+        alert("Błąd: " + error);
+    }
+}
+
+function send(command) {
+    if (!characteristic || command === lastCommand) return;
+    lastCommand = command;
+    characteristic.writeValue(new TextEncoder().encode(command));
+}
+
+const joystick = document.getElementById("joystick");
+const stick = document.getElementById("stick");
+const center = 125;
+const maxDist = 80;
+
+joystick.addEventListener("touchmove", function(e){
+    e.preventDefault();
+    const rect = joystick.getBoundingClientRect();
+    let dx = e.touches[0].clientX - rect.left - center;
+    let dy = e.touches[0].clientY - rect.top - center;
+
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    if(dist > maxDist){ dx *= maxDist/dist; dy *= maxDist/dist; }
+
+    stick.style.left = (center + dx - 50) + "px";
+    stick.style.top  = (center + dy - 50) + "px";
+
+    if(dy < -30) send("1");       // forward
+    else if(dx > 30) send("2");   // right
+    else if(dx < -30) send("3");  // left
+    else send("0");                // stop
+});
+
+joystick.addEventListener("touchend", function(){
+    stick.style.left = "75px";
+    stick.style.top  = "75px";
+    send("0");
+});
+</script>
+
+</body>
+</html>
